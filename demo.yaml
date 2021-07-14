@@ -1,0 +1,435 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: amqbroker
+  labels:
+    app: amqbroker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: amqbroker
+  template:
+    metadata:
+      labels:
+        app: amqbroker
+    spec:
+      containers:
+        - name: amqbroker
+          image: quay.io/redhat_emp1/amqbroker:1.0
+          ports:
+            - containerPort: 61616
+              protocol: TCP
+            - containerPort: 8080
+              protocol: TCP
+            - containerPort: 8161
+              protocol: TCP
+            - containerPort: 8443
+              protocol: TCP
+          resources: {}
+          imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: amqbroker
+  labels:
+    app: amqbroker
+spec:
+  ports:
+    - name: 61616-tcp
+      protocol: TCP
+      port: 61616
+      targetPort: 61616
+    - name: 8080-tcp
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+    - name: 8161-tcp
+      protocol: TCP
+      port: 8161
+      targetPort: 8161
+    - name: 8443-tcp
+      protocol: TCP
+      port: 8443
+      targetPort: 8443
+  selector:
+    app: amqbroker
+  type: ClusterIP
+  sessionAffinity: None
+---
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: amqbroker
+  labels:
+    app: amqbroker
+spec:
+  to:
+    kind: Service
+    name: amqbroker
+    weight: 100
+  port:
+    targetPort: 8161-tcp
+  wildcardPolicy: None
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: postgresql
+  generation: 1
+  labels:
+    app: postgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+        - name: postgresql
+          image: registry.redhat.io/rhscl/postgresql-12-rhel7
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRESQL_USER
+              value: userBYX
+            - name: POSTGRESQL_PASSWORD
+              value: VvQxyIQL3niFQFek
+            - name: POSTGRESQL_DATABASE
+              value: sampledb
+            - name: POSTGRESQL_MAX_PREPARED_TRANSACTIONS
+              value: '63'
+          resources: {}
+          imagePullPolicy: Always
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: postgresql
+  labels:
+    app: postgresql
+spec:
+  ports:
+    - name: 5432-tcp
+      protocol: TCP
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: postgresql
+  type: ClusterIP
+  sessionAffinity: None
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: camel-quarkus-order
+  generation: 1
+  labels:
+    app: camel-quarkus-order
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: camel-quarkus-order
+  template:
+    metadata:
+      labels:
+        app: camel-quarkus-order
+    spec:
+      volumes:
+        - name: camel-quarkus-order-1
+          emptyDir: {}
+      containers:
+        - resources: {}
+          terminationMessagePath: /dev/termination-log
+          name: camel-quarkus-order
+          env:
+            - name: quarkus_datasource_jdbc_url
+              value: >-
+                jdbc:postgresql://postgresql:5432/sampledb
+            - name: quarkus_datasource_username
+              value: userBYX
+            - name: quarkus_datasource_password
+              value: VvQxyIQL3niFQFek
+            - name: broker_url
+              value: 'tcp://amqbroker:61616'
+            - name: quarkus_log_level
+              value: INFO
+            - name: quarkus_log_file_path
+              value: /tmp/quarkus.log
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+            - containerPort: 8443
+              protocol: TCP
+            - containerPort: 8778
+              protocol: TCP
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: camel-quarkus-order-1
+              mountPath: /opt/quarkus-app/ObjectStore
+          terminationMessagePolicy: File
+          image: quay.io/redhat_emp1/camel-quarkus-order:1.1
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: camel-quarkus-order
+  labels:
+    app: camel-quarkus-order
+spec:
+  ports:
+    - name: 8080-tcp
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: camel-quarkus-order
+  type: ClusterIP
+  sessionAffinity: None
+---
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: camel-quarkus-order
+  labels:
+    app: camel-quarkus-order
+spec:
+  to:
+    kind: Service
+    name: camel-quarkus-order
+    weight: 100
+  port:
+    targetPort: 8080-tcp
+  wildcardPolicy: None
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: datagrid
+  generation: 1
+  labels:
+    app: datagrid
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: datagrid
+  template:
+    metadata:
+      labels:
+        app: datagrid
+    spec:
+      containers:
+        - name: datagrid
+          image: quay.io/redhat_emp1/datagrid:1.1
+          ports:
+            - containerPort: 11222
+              protocol: TCP
+            - containerPort: 8080
+              protocol: TCP
+            - containerPort: 8443
+              protocol: TCP
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: datagrid
+  labels:
+    app: datagrid
+spec:
+  ports:
+    - name: 11222-tcp
+      protocol: TCP
+      port: 11222
+      targetPort: 11222
+    - name: 8080-tcp
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+    - name: 8443-tcp
+      protocol: TCP
+      port: 8443
+      targetPort: 8443
+  selector:
+    app: datagrid
+  type: ClusterIP
+  sessionAffinity: None
+---
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: datagrid
+  labels:
+    app: datagrid
+spec:
+  to:
+    kind: Service
+    name: datagrid
+    weight: 100
+  port:
+    targetPort: 11222-tcp
+  wildcardPolicy: None
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: camel-quarkus-processor
+  labels:
+    app: camel-quarkus-processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: camel-quarkus-processor
+  template:
+    metadata:
+      labels:
+        app: camel-quarkus-processor
+    spec:
+      volumes:
+        - name: camel-quarkus-processor-1
+          emptyDir: {}
+      containers:
+        - resources: {}
+          terminationMessagePath: /dev/termination-log
+          name: camel-quarkus-processor
+          env:
+            - name: quarkus_datasource_jdbc_url
+              value: >-
+                jdbc:postgresql://postgresql:5432/sampledb
+            - name: quarkus_datasource_username
+              value: userBYX
+            - name: quarkus_datasource_password
+              value: VvQxyIQL3niFQFek
+            - name: broker_url
+              value: 'tcp://amqbroker:61616'
+            - name: quarkus_log_level
+              value: INFO
+            - name: quarkus_log_file_path
+              value: /tmp/quarkus.log
+            - name: infinispan_uri
+              value: 'hotrod://datagrid:11222'
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+            - containerPort: 8443
+              protocol: TCP
+            - containerPort: 8778
+              protocol: TCP
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: camel-quarkus-processor-1
+              mountPath: /opt/quarkus-app/ObjectStore
+          terminationMessagePolicy: File
+          image: quay.io/redhat_emp1/camel-quarkus-processor:1.0
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: camel-quarkus-processor
+  labels:
+    app: camel-quarkus-processor
+spec:
+  ports:
+    - name: 8080-tcp
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+    - name: 8443-tcp
+      protocol: TCP
+      port: 8443
+      targetPort: 8443
+    - name: 8778-tcp
+      protocol: TCP
+      port: 8778
+      targetPort: 8778
+  selector:
+    app: camel-quarkus-processor
+  type: ClusterIP
+  sessionAffinity: None
+---
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: camel-quarkus-processor
+  labels:
+    app: camel-quarkus-processor
+spec:
+  to:
+    kind: Service
+    name: camel-quarkus-processor
+    weight: 100
+  port:
+    targetPort: 8080-tcp
+  wildcardPolicy: None

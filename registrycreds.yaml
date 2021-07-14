@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+  .dockerconfigjson: XXXXXXXXX
+kind: Secret
+metadata:
+  name: quay.io
+type: kubernetes.io/dockerconfigjson
